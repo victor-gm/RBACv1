@@ -1,0 +1,108 @@
+#!/bin/bash
+function help_command {
+
+	echo "USO: environment [ARGUMENTOS]"
+	echo -e "Comandos disponibles:\n"
+	echo "--clean-all		destruye el entorno y la home del usuario"
+	echo "--reset			destruye y vuelve a cargar el entorno, sin borrar la home"
+	echo "--help			muestra los comandos disponibles y una breve descripción"
+	echo "--list-commands			muestra los comandos disponibles para ese usuario"
+	echo "--request-command [MENSAJE]	envía un email con el comando solicitado"
+}
+
+function cleanEnvironment {
+	
+	echo "Tu entorno va a ser eliminado, ¿estás seguro?[S/N]"
+	read seguro
+	case $seguro in
+		"S" | "s")
+			read -p "Introduce tu usuario: " usuario
+			if [ $usuario == $(whoami) ] 
+			then
+				#Leemos el puerto del fichero de configuración
+				puerto=`sed -n '2p' < /etc/rbac/network.conf`
+				#Leemos el rol del grupo al que pertenece el usuario
+				rol=$(echo `groups $usuario` | awk -F " " '{print $3}')
+				echo "Eliminando entorno..."
+				echo -e cleanEnvironment $usuario $rol | nc -q 1 localhost $puerto -w 5
+			else 
+				echo "Usuario incorrecto"
+				exit
+			fi
+			;;
+		"N" | "n")
+			echo "Operación cancelada"
+			exit
+			;;
+	esac
+}
+
+function resetEnvironment {
+
+	echo "¿Seguro que quieres resetear tu entorno?[S/N]"
+	read seguro;
+	case $seguro in
+		"S" | "s")
+			puerto=`sed -n '2p' < /etc/rbac/network.conf`
+			rol=$(echo `groups $(whoami)` | awk -F " " '{print $3}');
+			echo "Reseteando..."
+            echo resetEnvironment $(whoami) $rol | nc -q 1 localhost $puerto
+            exit
+			;;
+		"N" | "n")
+			echo "Operación cancelada"
+			exit
+			;;
+	esac
+}
+
+
+
+function listCommands {
+	echo -e "Comandos disponibles: \n"
+	rol=$(echo `groups $(whoami)` | awk -F " " '{print $3}');
+	linea=`sed -n '2p' < /etc/rbac/roles/$rol.conf`
+	comandos=$(echo $linea | awk -F [-] '{print $2}')
+	echo $comandos
+}
+
+function reqCommand {
+	rol=$(echo `groups $(whoami)` | awk -F " " '{print $3}');
+	#Comprobamos que haya escrito un mensaje despues del comando
+	if [ ! $# == 2 ]; then
+		echo "Argumento inválido, USO: environment --request-command [MENSAJE]"
+		exit
+	fi
+       	puerto=`sed -n '2p' < /etc/rbac/network.conf`
+	echo "Enviando email..."
+       	echo -e reqCommand $(whoami) $rol $2 | nc -q 1 localhost $puerto -w 5
+	
+}
+
+if [ ! $# -gt 0 ]; then
+	echo "environment: falta un argumento"
+	echo "Prueba 'environment --help' para más información"
+else 
+	case $1 in
+		"--clean-all")
+			cleanEnvironment
+			;;
+		"--reset")
+			resetEnvironment
+			;;
+		"--help")
+			help_command
+			;;
+		"--list-commands")
+			listCommands
+			;;
+		"--request-command")
+			reqCommand $*
+			;;
+		*)
+			echo "USO: environment [ARGUMENTO]"
+			echo "Prueba 'environment --help' para más información"
+			;;
+	esac
+fi
+			
